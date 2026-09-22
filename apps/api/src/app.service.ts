@@ -9,7 +9,7 @@ export class AppService {
     return {
       service: 'dj-solar-api',
       status: 'ok',
-      step: 'Passo 3 — Prisma + schema inicial + seed',
+      step: 'Passo 4 — Auth API',
     };
   }
 

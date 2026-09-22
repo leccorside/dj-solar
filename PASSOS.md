@@ -33,7 +33,7 @@ Entre colchetes ao final de cada passo, os itens do `PROMPT.md` cobertos.
 
 ## Autenticação & RBAC
 
-- [ ] **Passo 4 — Auth API**
+- [x] **Passo 4 — Auth API**
   Login, refresh token (rotação), logout, recuperação de senha, alteração de senha,
   proteção de rotas, rate limit em login/recuperação, Argon2.
   `[64][70][71]`

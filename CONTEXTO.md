@@ -4,9 +4,10 @@ Resumo vivo do estado do projeto. Atualizado ao final de cada implementação re
 
 ## Estado atual
 
-Fundação do monorepo + Docker Compose + banco de dados com schema inicial e seed
-concluídos (Passos 1 a 3 de `PASSOS.md`). Projeto sobe inteiro do zero (schema
-aplicado e SUPER_ADMIN criado automaticamente) com `docker compose up -d --build`:
+Fundação do monorepo + Docker Compose + banco de dados com schema/seed + Auth API
+concluídos (Passos 1 a 4 de `PASSOS.md`). Projeto sobe inteiro do zero (schema
+aplicado e SUPER_ADMIN criado automaticamente) com `docker compose up -d --build`,
+e a API já autentica de ponta a ponta (login/refresh/logout/recuperação de senha):
 
 - `PROMPT.md` — especificação completa original (113 requisitos).
 - `PASSOS.md` — checklist de execução em 30 passos, em ordem de prioridade,
@@ -37,6 +38,13 @@ aplicado e SUPER_ADMIN criado automaticamente) com `docker compose up -d --build
   `ADMIN_INITIAL_PASSWORD` (senha com hash Argon2). O serviço `api` do
   `docker-compose.yml` roda `prisma migrate deploy && prisma db seed` antes
   de iniciar — ambiente novo já sobe com banco populado, sem passo manual.
+- Auth completo em `apps/api/src/auth/`: login, refresh (com rotação),
+  logout, recuperação de senha (forgot/reset), troca de senha autenticada e
+  `GET /auth/me`. Guard JWT global (`APP_GUARD`) protege todas as rotas por
+  padrão — usar `@Public()` para isentar. Rate limit via `@nestjs/throttler`
+  (global + limites mais restritos em login/forgot-password). Helmet, CORS
+  restrito às origens do `.env` e `ValidationPipe` global habilitados em
+  `main.ts`. `PasswordResetToken` adicionado ao schema Prisma.
 
 ## Histórico de implementações
 
@@ -70,6 +78,33 @@ seguido de `docker compose up -d --build`: o banco foi criado, a migration
 aplicada e o seed rodou sozinho — `GET /api/v1/db-check` confirmou
 `{"database":"connected","roles":5,"permissions":12,"users":1}` sem nenhum
 passo manual.
+
+**Passo 4 — Auth API.** Login (Argon2 + JWT access de curta duração),
+refresh token com rotação (armazenado como hash SHA-256, nunca em texto
+puro), logout, recuperação de senha (token de uso único, expira em 1h,
+logado via `Logger` em dev — envio real por SMTP fica para o Passo 19/104),
+troca de senha autenticada (revoga todas as sessões existentes), `GET
+/auth/me`. Guard `JwtAuthGuard` global via `APP_GUARD` + decorator
+`@Public()` para as rotas de entrada (login/refresh/logout/forgot/reset).
+Rate limit via `@nestjs/throttler` (100 req/min global; 5/min em login e
+reset; 3/min em forgot-password). Helmet, CORS restrito a
+`VITE_SITE_URL`/`VITE_ADMIN_URL` com `credentials: true`, e `ValidationPipe`
+global (whitelist + transform) habilitados em `main.ts`. Cookie de refresh
+token: `httpOnly`, `sameSite: strict`, `path: /api/v1/auth` — decisão
+consciente de **não** implementar um esquema de CSRF token separado (ver
+"Limitações conhecidas") dado o baixo impacto prático de um CSRF nessas
+duas rotas específicas.
+
+Testado de ponta a ponta via `curl` num ambiente 100% novo
+(`docker compose down -v` + `up -d --build`): login retorna accessToken +
+seta cookie; `/auth/me` autenticado funciona e sem token dá 401; refresh
+rotaciona o cookie (token antigo passa a ser rejeitado); logout revoga o
+token corrente; rate limit do login bloqueia a 6ª tentativa em 60s com 429;
+forgot-password sempre responde genérico e loga o link; reset-password
+rejeita senha fraca, aceita senha válida, rejeita reuso do token, e a nova
+senha passa a funcionar no login (senha antiga para de funcionar); e
+change-password troca a senha de fato (senha anterior para de logar, a nova
+funciona).
 
 ## Erros e correções conhecidas
 
@@ -136,12 +171,22 @@ passo manual.
   postinstall pesado/com dependência de arquivo específico dentro de um
   workspace precisa ter esse arquivo copiado em **todos** os Dockerfiles do
   monorepo, não só no do serviço que o usa.
+- **`POST /auth/logout` retornando 401 mesmo com o cookie de refresh
+  correto.** A rota não tinha `@Public()`, então caía sob o guard JWT global
+  e exigia um access token válido no header `Authorization` — que o teste
+  (corretamente) não estava enviando, já que logout deveria funcionar só com
+  o cookie de refresh, inclusive com o access token expirado.
+  **Correção:** `logout` marcado como `@Public()` — a prova de autorização
+  da ação é a posse do cookie httpOnly do refresh token, não do access
+  token. Vale como padrão para futuras rotas: nem toda rota que manipula
+  dados sensíveis do usuário precisa do guard de access token, se ela já
+  valida posse de outro credential (cookie, token de reset, etc.).
 
 ## Pendências / próximos passos
 
 Seguir `PASSOS.md` em ordem, um passo por vez, com autorização explícita do usuário
-entre cada passo. Próximo: **Passo 4 — Auth API** (login/refresh/logout/
-recuperação de senha, rate limit, Argon2 — aguardando autorização).
+entre cada passo. Próximo: **Passo 5 — CRUD de usuários/papéis + Auditoria**
+(aguardando autorização).
 
 ## Limitações conhecidas / decisões deliberadas de escopo
 
@@ -155,3 +200,17 @@ recuperação de senha, rate limit, Argon2 — aguardando autorização).
 - Demais decisões de arquitetura (stack, ORM, storage, etc.) estão documentadas no
   plano aprovado em `PASSOS.md` e serão referenciadas por passo conforme
   implementadas.
+- **CSRF token dedicado (double-submit cookie) não implementado.** Decisão
+  consciente no Passo 4: o cookie de refresh token usa `sameSite: strict`
+  (mitigação forte para o cenário real de ameaça), e as ações realmente
+  sensíveis (change-password, futuras rotas protegidas) exigem o access
+  token via header `Authorization` — imune a CSRF por natureza, já que um
+  site malicioso não consegue ler/anexar esse token de outra origem. Revisar
+  se algum formulário público futuro passar a depender de cookie de sessão
+  para ações que causem dano real.
+- **`PermissionsGuard`/`@RequirePermissions()` (autorização granular) ainda
+  não existe.** O Passo 4 implementou autenticação (quem é o usuário); a
+  autorização por permissão (o que ele pode fazer) fica para o Passo 5, que
+  é o primeiro a precisar de fato (CRUD de usuários/papéis exigindo
+  `users.manage`). Adicionar a peça antes disso seria infraestrutura sem
+  consumidor real.

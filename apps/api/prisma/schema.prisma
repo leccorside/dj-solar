@@ -63,8 +63,9 @@ model User {
   /// Soft delete (item 69 do PROMPT.md) — usuário nunca é removido fisicamente.
   deletedAt    DateTime? @map("deleted_at")
 
-  role          Role           @relation(fields: [roleId], references: [id])
-  refreshTokens RefreshToken[]
+  role                Role                 @relation(fields: [roleId], references: [id])
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
 
   @@index([roleId])
   @@map("users")
@@ -86,4 +87,20 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+/// Tokens de recuperação de senha (item 64 do PROMPT.md) — mesma lógica do
+/// RefreshToken: apenas o hash do token é persistido.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
