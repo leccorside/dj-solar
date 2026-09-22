@@ -1,0 +1,6 @@
+{
+  "name": "@djsolar/config",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Configurações compartilhadas de TypeScript e ESLint para o monorepo DJ Solar"
+}

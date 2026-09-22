@@ -1,0 +1,22 @@
+{
+  "name": "dj-solar",
+  "private": true,
+  "version": "0.1.0",
+  "description": "DJ Solar — plataforma institucional premium com CMS administrativo completo",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,css}\" \"packages/**/*.{ts,tsx}\" \"*.md\""
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  }
+}
