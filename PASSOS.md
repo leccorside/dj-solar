@@ -26,7 +26,7 @@ Entre colchetes ao final de cada passo, os itens do `PROMPT.md` cobertos.
   GA/GTM, Maps, WhatsApp, integrações, URLs, ambiente).
   `[6][7][8]`
 
-- [ ] **Passo 3 — Prisma + schema inicial + seed**
+- [x] **Passo 3 — Prisma + schema inicial + seed**
   `User`, `Role`, `Permission`, `RolePermission`, `RefreshToken`. Migrations + seed
   do `SUPER_ADMIN` via `ADMIN_INITIAL_EMAIL`/`ADMIN_INITIAL_PASSWORD`.
   `[5][65][66][67][89][90]`

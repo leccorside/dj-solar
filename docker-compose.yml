@@ -37,6 +37,10 @@ services:
     env_file: .env
     environment:
       CHOKIDAR_USEPOLLING: 'true'
+    # Aplica migrations pendentes e roda o seed (idempotente) a cada start —
+    # garante que um `docker compose up --build` em ambiente novo já suba
+    # com o schema e o SUPER_ADMIN prontos, sem passo manual.
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed && npm run start:dev"
     ports:
       - '${API_PORT:-3333}:3333'
     volumes:

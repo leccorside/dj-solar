@@ -9,4 +9,9 @@ export class AppController {
   getStatus() {
     return this.appService.getStatus();
   }
+
+  @Get('db-check')
+  getDbCheck() {
+    return this.appService.getDbCheck();
+  }
 }

@@ -4,8 +4,9 @@ Resumo vivo do estado do projeto. Atualizado ao final de cada implementação re
 
 ## Estado atual
 
-Fundação do monorepo + Docker Compose de desenvolvimento concluídos (Passos 1 e 2
-de `PASSOS.md`). Projeto sobe inteiro com `docker compose up -d --build`:
+Fundação do monorepo + Docker Compose + banco de dados com schema inicial e seed
+concluídos (Passos 1 a 3 de `PASSOS.md`). Projeto sobe inteiro do zero (schema
+aplicado e SUPER_ADMIN criado automaticamente) com `docker compose up -d --build`:
 
 - `PROMPT.md` — especificação completa original (113 requisitos).
 - `PASSOS.md` — checklist de execução em 30 passos, em ordem de prioridade,
@@ -26,6 +27,16 @@ de `PASSOS.md`). Projeto sobe inteiro com `docker compose up -d --build`:
   `admin`), Dockerfiles de desenvolvimento em `docker/{website,admin,api}/`,
   `.env.example` completo (banco, JWT, storage, SMTP, analytics, Maps,
   WhatsApp, integrações futuras) e `.dockerignore`.
+- Prisma configurado em `apps/api`: schema com `User`, `Role`, `Permission`,
+  `RolePermission`, `RefreshToken` (relacionamentos, índices, soft delete em
+  `User.deletedAt`), migration inicial commitada em
+  `apps/api/prisma/migrations/`, `PrismaService`/`PrismaModule` (global) e
+  seed idempotente (`apps/api/prisma/seed.ts`) que cria as 5 roles do item 65,
+  as 12 permissões de exemplo do item 66, dá acesso total ao `SUPER_ADMIN`
+  (item 67) e cria o usuário inicial a partir de `ADMIN_INITIAL_EMAIL`/
+  `ADMIN_INITIAL_PASSWORD` (senha com hash Argon2). O serviço `api` do
+  `docker-compose.yml` roda `prisma migrate deploy && prisma db seed` antes
+  de iniciar — ambiente novo já sobe com banco populado, sem passo manual.
 
 ## Histórico de implementações
 
@@ -47,6 +58,18 @@ item 8 do `PROMPT.md`. Validado de ponta a ponta: `docker compose up -d
 website e admin em HTTP 200), e o hot reload foi confirmado **ao vivo** nos
 3 apps (edição de arquivo no host refletida sem rebuild/restart — ver
 "Erros e correções conhecidas" sobre o ajuste necessário no watch da API).
+
+**Passo 3 — Prisma + schema inicial + seed.** Schema com `User`/`Role`/
+`Permission`/`RolePermission`/`RefreshToken`, migration inicial gerada via
+`prisma migrate dev --name init` e commitada, `PrismaService`/`PrismaModule`
+plugados no `AppModule`, seed idempotente do RBAC + `SUPER_ADMIN`, e o
+`docker-compose.yml` passou a rodar `prisma migrate deploy && prisma db seed`
+automaticamente antes de subir a API. Validado de ponta a ponta com
+`docker compose down -v` (zera os volumes, simulando ambiente 100% novo)
+seguido de `docker compose up -d --build`: o banco foi criado, a migration
+aplicada e o seed rodou sozinho — `GET /api/v1/db-check` confirmou
+`{"database":"connected","roles":5,"permissions":12,"users":1}` sem nenhum
+passo manual.
 
 ## Erros e correções conhecidas
 
@@ -100,12 +123,25 @@ website e admin em HTTP 200), e o hot reload foi confirmado **ao vivo** nos
   como padrão para qualquer processo Node com watch mode rodando em
   container com bind mount neste projeto (Vite já usa `usePolling: true`
   equivalente desde o Passo 1).
+- **`prisma generate` (postinstall do `apps/api`) quebrando o build das
+  imagens `website` e `admin`.** Por ser monorepo com npm workspaces, `npm
+  install` na raiz dispara o postinstall de **todos** os workspaces — incluindo
+  o `prisma generate` do `apps/api` — mesmo em Dockerfiles que não usam
+  Prisma. Como esses Dockerfiles não copiavam `apps/api/prisma/` nem
+  instalavam `openssl`, o build de `website`/`admin` falhava com "Could not
+  find Prisma Schema" logo depois de um aviso sobre libssl não encontrado.
+  **Correção:** os 3 Dockerfiles (`docker/website`, `docker/admin`,
+  `docker/api`) agora instalam `openssl` e copiam `apps/api/prisma/` antes do
+  `RUN npm install`. Vale como regra geral: qualquer novo pacote com
+  postinstall pesado/com dependência de arquivo específico dentro de um
+  workspace precisa ter esse arquivo copiado em **todos** os Dockerfiles do
+  monorepo, não só no do serviço que o usa.
 
 ## Pendências / próximos passos
 
 Seguir `PASSOS.md` em ordem, um passo por vez, com autorização explícita do usuário
-entre cada passo. Próximo: **Passo 3 — Prisma + schema inicial + seed**
-(aguardando autorização).
+entre cada passo. Próximo: **Passo 4 — Auth API** (login/refresh/logout/
+recuperação de senha, rate limit, Argon2 — aguardando autorização).
 
 ## Limitações conhecidas / decisões deliberadas de escopo
 
