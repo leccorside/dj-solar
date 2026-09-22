@@ -7,5 +7,9 @@
       "@/*": ["src/*"]
     }
   },
+  "watchOptions": {
+    "watchFile": "dynamicPriorityPolling",
+    "watchDirectory": "dynamicPriorityPolling"
+  },
   "include": ["src"]
 }

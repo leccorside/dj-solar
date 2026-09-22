@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+dist
+**/dist
+build
+**/build
+coverage
+.git
+.gitignore
+*.log
+.env
+.env.*
+!.env.example
+uploads
+.vscode

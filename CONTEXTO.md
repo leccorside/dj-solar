@@ -4,7 +4,8 @@ Resumo vivo do estado do projeto. Atualizado ao final de cada implementação re
 
 ## Estado atual
 
-Fundação do monorepo concluída (Passo 1 de `PASSOS.md`):
+Fundação do monorepo + Docker Compose de desenvolvimento concluídos (Passos 1 e 2
+de `PASSOS.md`). Projeto sobe inteiro com `docker compose up -d --build`:
 
 - `PROMPT.md` — especificação completa original (113 requisitos).
 - `PASSOS.md` — checklist de execução em 30 passos, em ordem de prioridade,
@@ -18,7 +19,13 @@ Fundação do monorepo concluída (Passo 1 de `PASSOS.md`):
   prefixo `/api/v1`), `packages/types` (tipos compartilhados: `ContentStatus`,
   `PaginationParams`/`PaginatedResult`), `packages/config` (tsconfig/eslint
   compartilhados).
-- Repositório git local inicializado (sem remoto configurado).
+- Repositório git local inicializado (sem remoto configurado). Commits são
+  feitos manualmente pelo usuário — eu apenas preparo o texto da mensagem ao
+  final de cada passo, nunca executo `git commit`.
+- `docker-compose.yml` com 5 serviços (`postgres`, `redis`, `api`, `website`,
+  `admin`), Dockerfiles de desenvolvimento em `docker/{website,admin,api}/`,
+  `.env.example` completo (banco, JWT, storage, SMTP, analytics, Maps,
+  WhatsApp, integrações futuras) e `.dockerignore`.
 
 ## Histórico de implementações
 
@@ -28,6 +35,18 @@ mínimos (porém reais e funcionais) dos 3 apps. Validado com `npm install` +
 `typecheck` + `lint` + `build` rodando dentro de um container `node:20`
 (ver "Erros e correções conhecidas") e smoke test manual da API compilada
 (`GET /api/v1` respondendo `{"service":"dj-solar-api","status":"ok",...}`).
+
+**Passo 2 — Docker Compose de desenvolvimento.** Criados os 3 Dockerfiles de
+dev (`node:20-alpine`, cada um instala o monorepo inteiro via workspaces e
+sobe seu respectivo app com watch/hot reload), `docker-compose.yml` com
+`postgres:16-alpine` e `redis:7-alpine` (com healthcheck), volumes anônimos
+para `node_modules` (garante que a imagem builda com dependências mesmo sem
+`node_modules` no host) e `.env.example` cobrindo todas as categorias do
+item 8 do `PROMPT.md`. Validado de ponta a ponta: `docker compose up -d
+--build` subiu os 5 serviços, os 3 endpoints responderam (API `/api/v1`,
+website e admin em HTTP 200), e o hot reload foi confirmado **ao vivo** nos
+3 apps (edição de arquivo no host refletida sem rebuild/restart — ver
+"Erros e correções conhecidas" sobre o ajuste necessário no watch da API).
 
 ## Erros e correções conhecidas
 
@@ -68,11 +87,24 @@ mínimos (porém reais e funcionais) dos 3 apps. Validado com `npm install` +
   próprio `tsconfig.json`. Vale como regra geral para os próximos passos:
   nunca definir `outDir`/`rootDir` em tsconfigs compartilhados de
   `packages/config` — sempre no tsconfig do projeto consumidor.
+- **Watch da API (`nest start --watch`) não detectava mudanças de arquivo no
+  bind mount do Docker Desktop no Windows.** O `watchOptions` inicial
+  (`useFsEventsWithFallbackDynamicPolling`) depende de primeiro tentar
+  eventos nativos do filesystem e só cair para polling depois — nesse tipo de
+  bind mount (Windows → Docker Desktop → Linux container) os eventos nativos
+  nunca chegam, e o fallback demorou demais/não disparou de forma confiável.
+  **Correção:** trocado para `dynamicPriorityPolling` em `watchFile` e
+  `watchDirectory` no `apps/api/tsconfig.json`, forçando polling direto sem
+  depender de detecção de eventos nativos. Confirmado funcionando com teste
+  real (edição de arquivo refletida em ~3s sem reiniciar o container). Vale
+  como padrão para qualquer processo Node com watch mode rodando em
+  container com bind mount neste projeto (Vite já usa `usePolling: true`
+  equivalente desde o Passo 1).
 
 ## Pendências / próximos passos
 
 Seguir `PASSOS.md` em ordem, um passo por vez, com autorização explícita do usuário
-entre cada passo. Próximo: **Passo 2 — Docker Compose de desenvolvimento**
+entre cada passo. Próximo: **Passo 3 — Prisma + schema inicial + seed**
 (aguardando autorização).
 
 ## Limitações conhecidas / decisões deliberadas de escopo

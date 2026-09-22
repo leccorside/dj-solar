@@ -20,7 +20,7 @@ Entre colchetes ao final de cada passo, os itens do `PROMPT.md` cobertos.
   npm workspaces, TypeScript/ESLint/Prettier base, `README.md` inicial.
   `[93]`
 
-- [ ] **Passo 2 — Docker Compose de desenvolvimento**
+- [x] **Passo 2 — Docker Compose de desenvolvimento**
   Dockerfiles dev (hot reload) para `api`/`website`/`admin`, serviços `postgres` e
   `redis`, `docker-compose.yml`, `.env.example` completo (banco, JWT, storage, SMTP,
   GA/GTM, Maps, WhatsApp, integrações, URLs, ambiente).

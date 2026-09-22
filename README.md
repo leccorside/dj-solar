@@ -19,25 +19,37 @@ packages/
 
 ## Execução
 
-> ⚠️ O projeto é 100% containerizado. A partir do Passo 2 (Docker Compose), todo o
-> desenvolvimento roda via:
->
-> ```bash
-> docker compose up -d --build
-> ```
->
-> Sem depender de instalação local de Node, PostgreSQL, Redis ou Nginx.
-
-Enquanto o Docker Compose ainda não existe (fundação em andamento), é possível
-validar cada workspace localmente com Node.js >= 20:
+> ⚠️ O projeto é 100% containerizado. Não é necessário instalar Node, PostgreSQL,
+> Redis ou Nginx localmente — tudo roda via Docker.
 
 ```bash
-npm install
-npm run typecheck
-npm run lint
-npm run build
+cp .env.example .env
+docker compose up -d --build
 ```
 
 - Website: http://localhost:5173
 - Admin: http://localhost:5174
 - API: http://localhost:3333/api/v1
+- PostgreSQL: localhost:5432 (ver credenciais em `.env`)
+- Redis: localhost:6379
+
+Hot reload está ativo nos três serviços de aplicação (Vite para website/admin,
+`nest start --watch` para a API) — editar o código no host reflete direto nos
+containers via bind mount, sem precisar reconstruir a imagem.
+
+Para acompanhar logs de um serviço específico:
+
+```bash
+docker compose logs -f api
+```
+
+Para derrubar tudo (mantendo os volumes de dados do Postgres/Redis):
+
+```bash
+docker compose down
+```
+
+**Importante:** nunca rode `npm install` diretamente no host Windows deste
+projeto — instalações diretas no Windows já se mostraram instáveis (antivírus
+corrompendo `node_modules`, ver `CONTEXTO.md`). Toda instalação de dependências
+acontece dentro dos containers, automaticamente, via `docker compose up --build`.

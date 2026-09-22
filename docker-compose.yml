@@ -1,0 +1,100 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CHOKIDAR_USEPOLLING: 'true'
+    ports:
+      - '${API_PORT:-3333}:3333'
+    volumes:
+      - ./:/app
+      - /app/node_modules
+      - /app/apps/website/node_modules
+      - /app/apps/admin/node_modules
+      - /app/apps/api/node_modules
+      - /app/packages/types/node_modules
+      - /app/packages/config/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  website:
+    build:
+      context: .
+      dockerfile: docker/website/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CHOKIDAR_USEPOLLING: 'true'
+    ports:
+      - '${WEBSITE_PORT:-5173}:5173'
+    volumes:
+      - ./:/app
+      - /app/node_modules
+      - /app/apps/website/node_modules
+      - /app/apps/admin/node_modules
+      - /app/apps/api/node_modules
+      - /app/packages/types/node_modules
+      - /app/packages/config/node_modules
+    depends_on:
+      - api
+
+  admin:
+    build:
+      context: .
+      dockerfile: docker/admin/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CHOKIDAR_USEPOLLING: 'true'
+    ports:
+      - '${ADMIN_PORT:-5174}:5174'
+    volumes:
+      - ./:/app
+      - /app/node_modules
+      - /app/apps/website/node_modules
+      - /app/apps/admin/node_modules
+      - /app/apps/api/node_modules
+      - /app/packages/types/node_modules
+      - /app/packages/config/node_modules
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
