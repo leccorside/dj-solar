@@ -66,6 +66,7 @@ model User {
   role                Role                 @relation(fields: [roleId], references: [id])
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
+  auditLogs           AuditLog[]
 
   @@index([roleId])
   @@map("users")
@@ -103,4 +104,25 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+/// Auditoria de ações administrativas (item 68 do PROMPT.md) — quem alterou,
+/// o quê, quando, de onde e os valores antes/depois.
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?  @map("user_id")
+  userEmail String?  @map("user_email")
+  action    String
+  entity    String
+  entityId  String   @map("entity_id")
+  ipAddress String?  @map("ip_address")
+  /// Diff campo a campo: { campo: { before, after } }.
+  changes   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@map("audit_logs")
 }

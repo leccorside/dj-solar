@@ -4,10 +4,11 @@ Resumo vivo do estado do projeto. Atualizado ao final de cada implementação re
 
 ## Estado atual
 
-Fundação do monorepo + Docker Compose + banco de dados com schema/seed + Auth API
-concluídos (Passos 1 a 4 de `PASSOS.md`). Projeto sobe inteiro do zero (schema
-aplicado e SUPER_ADMIN criado automaticamente) com `docker compose up -d --build`,
-e a API já autentica de ponta a ponta (login/refresh/logout/recuperação de senha):
+Fundação do monorepo + Docker Compose + banco de dados com schema/seed + Auth API +
+CRUD de usuários/papéis/permissões com auditoria concluídos (Passos 1 a 5 de
+`PASSOS.md`). Projeto sobe inteiro do zero com `docker compose up -d --build`, a
+API autentica e autoriza de ponta a ponta, e o painel admin já tem tela de login
+funcional e telas reais de Usuários/Papéis/Auditoria:
 
 - `PROMPT.md` — especificação completa original (113 requisitos).
 - `PASSOS.md` — checklist de execução em 30 passos, em ordem de prioridade,
@@ -45,6 +46,15 @@ e a API já autentica de ponta a ponta (login/refresh/logout/recuperação de se
   (global + limites mais restritos em login/forgot-password). Helmet, CORS
   restrito às origens do `.env` e `ValidationPipe` global habilitados em
   `main.ts`. `PasswordResetToken` adicionado ao schema Prisma.
+- CRUD de usuários (`apps/api/src/users/`) e papéis (`apps/api/src/roles/`)
+  com atribuição de permissões, `PermissionsGuard`/`@RequirePermissions()`
+  (autorização granular via `APP_GUARD`), `AuditLogInterceptor` global
+  (`APP_INTERCEPTOR`) registrando quem alterou o quê/quando/de onde com diff
+  campo a campo, e `GET /audit-logs`. Painel admin (`apps/admin`) ganhou
+  cliente HTTP com refresh automático (`axios` + interceptor de retry em
+  401), store de autenticação (`zustand`), rotas protegidas, e telas reais
+  de Login, Dashboard (autenticado), Usuários, Papéis (com editor de
+  permissões) e Auditoria.
 
 ## Histórico de implementações
 
@@ -105,6 +115,36 @@ rejeita senha fraca, aceita senha válida, rejeita reuso do token, e a nova
 senha passa a funcionar no login (senha antiga para de funcionar); e
 change-password troca a senha de fato (senha anterior para de logar, a nova
 funciona).
+
+**Passo 5 — Usuários, papéis, permissões e auditoria.** Backend:
+`PermissionsGuard` (autorização granular, lê `RolePermission` por
+`roleId`), `AuditLogInterceptor` global (age só em rotas com
+`@AuditEntity(...)`, faz diff campo a campo antes/depois via snapshot
+genérico do model Prisma, nunca loga `passwordHash`), CRUD completo de
+`User` (soft delete, impede autoexclusão) e `Role` (impede excluir/alterar
+permissões do `SUPER_ADMIN`, impede excluir role com usuários vinculados),
+`PUT /roles/:id/permissions` com auditoria explícita (o diff genérico não
+enxerga a relação Role→Permission, então o service grava o registro
+manualmente com o before/after real das chaves de permissão — exatamente
+no formato do exemplo do item 68 do `PROMPT.md`). Frontend: `apiClient`
+(axios) com interceptor de refresh automático em 401, `useAuthStore`
+(zustand) com `bootstrap()` restaurando sessão via cookie no load da
+página, `ProtectedRoute`, `AdminLayout`+`Sidebar` (cresce só com módulos
+reais, nada de item de menu fantasma), telas de Login, Dashboard, Usuários
+(tabela + modal de criar/editar + exclusão com confirmação), Papéis
+(cards + modal de permissões com checkboxes + criação) e Auditoria
+(tabela com filtro por entidade).
+
+Testado de ponta a ponta via `curl` em ambiente 100% novo: login,
+`GET/POST /users` (usuário EDITOR criado), `GET /roles` (5 roles seedadas,
+`SUPER_ADMIN` com as 12 permissões), `PUT /roles/:id/permissions`
+(atribuição real), `POST /roles` (nova role SUPORTE), `GET /audit-logs`
+(3 registros corretos, incluindo diff de permissões), bloqueios de
+autorização (`EDITOR` sem `users.manage` → 403; sem token → 401) e
+proteções do `SUPER_ADMIN` (`DELETE`/`PUT permissions` → 403). Admin:
+`typecheck`+`lint`+`build` passando limpos, bundle de produção gerado
+(642 kB — acima do aviso padrão de 500 kB do Vite; otimização de
+performance/code-splitting fica para o Passo 76/77, não é bug).
 
 ## Erros e correções conhecidas
 
@@ -181,12 +221,66 @@ funciona).
   token. Vale como padrão para futuras rotas: nem toda rota que manipula
   dados sensíveis do usuário precisa do guard de access token, se ela já
   valida posse de outro credential (cookie, token de reset, etc.).
+- **Campo `changes` do `AuditLog` (Json opcional) rejeitando `null`
+  explícito.** O Prisma Client tipa campos `Json?` como aceitando
+  `NullableJsonNullValueInput | InputJsonValue | undefined` — passar `null`
+  diretamente (em vez de omitir a chave) não compila. Em seguida, o diff
+  genérico (`Record<string, {before,after}>`) também não é estruturalmente
+  `InputJsonValue` por conter valores `unknown`. **Correção:** usar
+  `changes ?? undefined` (omite a chave quando não há diff) e fazer cast
+  explícito para `Prisma.InputJsonValue | undefined` no ponto de escrita.
+  Padrão a repetir sempre que gravar JSON dinâmico em campos `Json?` do
+  Prisma.
+- **`react-hook-form` não permite `register()` genérico em formulários com
+  dois schemas Zod diferentes (criar vs. editar usuário).** Quando `form`
+  é `UseFormReturn<CreateForm> | UseFormReturn<UpdateForm>`, chamar
+  `form.register('name')` (campo comum aos dois schemas) não compila —
+  TypeScript não unifica as sobrecargas de `register` entre os dois tipos
+  genéricos. **Correção:** cast pontual do `register` para uma assinatura
+  mais simples (`(name: string) => ReturnType<typeof createForm.register>`)
+  nos 2 campos afetados (`name`, `roleId`) em `UserFormModal.tsx`. Os
+  campos exclusivos de cada modo (email/senha no create, isActive no
+  update) continuam usando a instância de formulário concreta
+  (`createForm`/`updateForm`) diretamente, sem cast.
+- **ESLint (`jsx-a11y/label-has-associated-control`) barrando o build do
+  admin.** Todos os `<label>` dos formulários (Login, criar usuário, criar
+  papel) estavam sem `htmlFor`/`id` associando ao campo — falha real de
+  acessibilidade (item 79 do `PROMPT.md`), não só lint chato. **Correção:**
+  adicionado `id` em cada input/select e `htmlFor` correspondente em cada
+  label, em `LoginPage`, `UserFormModal` e `RoleFormModal`.
+- **`docker compose exec` num container de dev já rodando (`nest start
+  --watch`) quebrou o servidor ao vivo.** Para validar `typecheck`/`lint`/
+  `build` da API isoladamente, rodei `docker compose exec api sh -c "...;
+  rm -rf dist; npx nest build"` — o `rm -rf dist` apagou o diretório que o
+  processo `nest start --watch` (rodando como PID 1 do mesmo container)
+  estava usando em paralelo, quebrando o dev server (`Cannot find module
+  '/app/apps/api/dist/main'` em loop a cada novo file-change). Precisou de
+  `docker compose restart api` pra recuperar.
+  **Correção/regra permanente:** nunca rodar `docker compose exec <serviço
+  de dev> sh -c "rm -rf dist && ..."` ou qualquer comando que mexa em
+  `dist`/artefatos de build num container que já tem um processo de
+  watch/dev rodando como processo principal. Para validação isolada de
+  build, usar `docker compose run --rm --no-deps <serviço> sh -c "..."`
+  (container novo e descartável) — foi exatamente esse padrão que já vinha
+  sendo usado para gerar migrations do Prisma desde o Passo 3, só não
+  tinha sido generalizado para outros comandos até este passo.
+- **Falhas intermitentes de conexão (`curl` retornando `HTTP_000`) em
+  requisições `POST` durante os testes**, mesmo com a operação
+  completando corretamente no servidor (confirmado relistando o recurso
+  logo em seguida). Padrão consistente com instabilidade pontual do proxy
+  de rede do Docker Desktop no Windows sob carga (muitas requisições/execs
+  em sequência), não um bug de aplicação — depois de cada ocorrência, uma
+  nova requisição de leitura confirmou que o dado tinha sido persistido
+  corretamente. Não requereu correção de código; só reforça o hábito de
+  sempre confirmar com uma leitura quando uma escrita reportar erro de
+  conexão neste ambiente de desenvolvimento.
 
 ## Pendências / próximos passos
 
 Seguir `PASSOS.md` em ordem, um passo por vez, com autorização explícita do usuário
-entre cada passo. Próximo: **Passo 5 — CRUD de usuários/papéis + Auditoria**
-(aguardando autorização).
+entre cada passo. Próximo: **Passo 6 — Módulo Settings (API)** (configurações
+globais: empresa, redes sociais, cores/tipografia/layout, analytics, SMTP,
+manutenção, parâmetros do simulador — com cache Redis; aguardando autorização).
 
 ## Limitações conhecidas / decisões deliberadas de escopo
 
@@ -208,9 +302,15 @@ entre cada passo. Próximo: **Passo 5 — CRUD de usuários/papéis + Auditoria*
   site malicioso não consegue ler/anexar esse token de outra origem. Revisar
   se algum formulário público futuro passar a depender de cookie de sessão
   para ações que causem dano real.
-- **`PermissionsGuard`/`@RequirePermissions()` (autorização granular) ainda
-  não existe.** O Passo 4 implementou autenticação (quem é o usuário); a
-  autorização por permissão (o que ele pode fazer) fica para o Passo 5, que
-  é o primeiro a precisar de fato (CRUD de usuários/papéis exigindo
-  `users.manage`). Adicionar a peça antes disso seria infraestrutura sem
-  consumidor real.
+- **Renomear um papel (`Role.name`) não é permitido pela API** — só
+  `description` é editável via `PATCH /roles/:id`. Decisão deliberada: o
+  nome do papel é usado como identidade em comparações no código (ex.:
+  `role.name === 'SUPER_ADMIN'`) e potencialmente no JWT; permitir rename
+  livre abriria brecha para quebrar essas comparações. Criar um novo papel
+  com o nome certo é o caminho, não renomear um existente.
+- **Bundle de produção do admin (642 kB) acima do limite de aviso do
+  Vite (500 kB).** Não é bug — otimização de bundle (code-splitting,
+  lazy loading de rotas) é escopo do Passo 76/77 (Performance), não deste
+  passo. Registrar aqui só para não ser confundido com regressão nos
+  próximos passos, quando o bundle só vai crescer (Blog com TipTap, mídia,
+  etc.).

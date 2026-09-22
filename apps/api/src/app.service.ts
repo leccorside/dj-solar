@@ -9,7 +9,7 @@ export class AppService {
     return {
       service: 'dj-solar-api',
       status: 'ok',
-      step: 'Passo 4 — Auth API',
+      step: 'Passo 5 — Usuários, papéis, permissões e auditoria',
     };
   }
 

@@ -1,22 +1,33 @@
-import { Route, Routes } from 'react-router-dom';
-
-function ScaffoldDashboard() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-50 px-8 text-center text-slate-800">
-      <img src="/logo-dj-solar.png" alt="DJ Solar" className="w-48" />
-      <h1 className="text-2xl font-bold">Painel Administrativo — DJ Solar</h1>
-      <p className="text-slate-500">
-        Fundação do monorepo concluída (Passo 1). Autenticação e módulos do CMS
-        chegam nos próximos passos.
-      </p>
-    </main>
-  );
-}
+import { useEffect } from 'react';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { AdminLayout } from './components/layout/AdminLayout';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { AuditLogPage } from './pages/audit/AuditLogPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { LoginPage } from './pages/LoginPage';
+import { RolesPage } from './pages/roles/RolesPage';
+import { UsersPage } from './pages/users/UsersPage';
+import { useAuthStore } from './store/auth-store';
 
 export default function App() {
+  const bootstrap = useAuthStore((s) => s.bootstrap);
+
+  useEffect(() => {
+    bootstrap();
+  }, [bootstrap]);
+
   return (
     <Routes>
-      <Route path="*" element={<ScaffoldDashboard />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AdminLayout />}>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/usuarios" element={<UsersPage />} />
+          <Route path="/papeis" element={<RolesPage />} />
+          <Route path="/auditoria" element={<AuditLogPage />} />
+        </Route>
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

@@ -38,7 +38,7 @@ Entre colchetes ao final de cada passo, os itens do `PROMPT.md` cobertos.
   proteção de rotas, rate limit em login/recuperação, Argon2.
   `[64][70][71]`
 
-- [ ] **Passo 5 — Usuários, papéis, permissões e auditoria**
+- [x] **Passo 5 — Usuários, papéis, permissões e auditoria**
   CRUD de usuários e papéis no admin, atribuição de permissões granulares,
   `AuditLog` (interceptor global registrando usuário/ação/entidade/ID/IP/data/
   valores alterados).
